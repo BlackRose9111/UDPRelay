@@ -1,26 +1,45 @@
 package baran;
-import baran.UDPService.*;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.StandardSocketOptions;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelPipeline;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.rtsp.RtspDecoder;
+import io.netty.handler.codec.rtsp.RtspEncoder;
+import baran.RTMP.RTMPHandler;
 public class App
 {
-    private static final int SERVER_PORT = 63636;
-    private static final int CLIENT_PORT = 63637;
-    private static final List<ClientInfo> clients = new CopyOnWriteArrayList<>();
-    private StreamerInfo streamerInfo; // <--- this is the guy that sends the UDP data. For it we are a client, for others we are a server
+    public static void main( String[] args ) throws Exception {
+        System.out.println( "Server Starting" );
+        // Configure the server
+        EventLoopGroup bossGroup = new NioEventLoopGroup(1);
+        EventLoopGroup workerGroup = new NioEventLoopGroup();
 
-    public static void main( String[] args )
-    {
-        System.out.println( "Server Starting at port"+ SERVER_PORT );
+        try {
+            ServerBootstrap bootstrap = new ServerBootstrap();
+            bootstrap.group(bossGroup, workerGroup)
+                    .channel(NioServerSocketChannel.class)
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        public void initChannel(SocketChannel ch) {
+                            ChannelPipeline pipeline = ch.pipeline();
+                            pipeline.addLast(new RtspEncoder());
+                            pipeline.addLast(new RtspDecoder());
+                            pipeline.addLast(new RTMPHandler()); // Your custom handler
+                        }
+                    });
 
-
-
-
+            // Start the server
+            ChannelFuture future = bootstrap.bind(1935).sync();
+            System.out.println("RTMP server started on port 1935");
+            future.channel().closeFuture().sync();
+        } finally {
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
+        }
     }
 
 }
